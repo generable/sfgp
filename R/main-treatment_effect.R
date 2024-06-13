@@ -20,7 +20,8 @@ sample_subjects <- function(data, id_var = "id", group_var = "arm") {
 #' \code{fit_post}.
 #' @param t_pred Vector of time points (in days). Chosen based on data range
 #' if \code{t_pred=NULL}. Chosen to be an evenly spaced vector from
-#' 0 to at most 2 years every 8 weeks if \code{t_pred="auto"}.
+#' 0 to at most 2 years every 8 weeks if \code{t_pred="auto"}. If
+#' \code{t_pred=NULL}, it will be changed to \code{"auto"} if \code{br=TRUE}.
 #' @param time_var name of the time variable
 #' @param group_var grouping variable
 #' @param method Used method for analyzing the treatment effect. Can be either
@@ -28,11 +29,16 @@ sample_subjects <- function(data, id_var = "id", group_var = "arm") {
 #'  \item \code{new_sub}: Simulating new imaginary subjects
 #'  \item \code{group_est}: Using group-level parameter estimates
 #' }
+#' @param br Use best response definition of depth? See the \code{dor}
+#' method of the \code{FunctionDraws} class.
 treatment_effect <- function(fit_post, fit_prior, time_var = "t",
                              t_pred = NULL, group_var = "arm",
-                             method = "new_sub") {
+                             method = "new_sub", br = FALSE) {
   # Validate input
   checkmate::assert_choice(method, choices = c("new_sub", "group_est"))
+  if (is.null(t_pred) && br) {
+    t_pred <- "auto"
+  }
 
   # "New" subjects
   if (method == "new_sub") {
@@ -53,50 +59,17 @@ treatment_effect <- function(fit_post, fit_prior, time_var = "t",
   list(
     traj_log = traj_log,
     traj = traj,
-    metrics = trajectory_metrics(traj, group_var, time_var),
+    depth = traj$dor(group_var = group_var, br = br),
+    duration = traj$dur(group_var = group_var, time_var = time_var),
+    duration_responding = traj$dur(
+      group_var = group_var,
+      time_var = time_var,
+      only_responding = TRUE
+    ),
     p_new = p_new
   )
 }
 
-
-#' Compute trajectory metrics.
-#'
-#' @export
-#' @param trajectories An object of class \code{\link{FunctionDraws}}.
-#' @param id_var Name of id variable.
-#' @param time_var Name of the time variable.
-#' @return The following metrics are computed for each draw for each id.
-#' \itemize{
-#'  \item \code{depth} = depth of response (RECIST)
-#'  \item \code{depth_br} = depth of response (best response definition, can
-#'  be negative)
-#'  \item \code{duration} = duration of response (RECIST)
-#'  \item \code{start} = start time of response (RECIST)
-#'  \item \code{end} = end time of response (RECIST)
-#'  \item \code{exists} = whether response exists (RECIST)
-#'  \item \code{endures} = whether response endures whole time interval (RECIST)
-#'  \item \code{ttb120} = Time to 1.2 x baseline (different duration metric).
-#' }
-#' See the \code{treatment-effect} vignette for definition of the metrics.
-trajectory_metrics <- function(trajectories, id_var, time_var) {
-  checkmate::assert_class(trajectories, "FunctionDraws")
-  checkmate::assert_character(id_var, len = 1)
-  checkmate::assert_character(time_var, len = 1)
-  df <- trajectories$as_data_frame_long()
-  df %>%
-    dplyr::group_by(!!sym(id_var), .draw_idx) %>%
-    dplyr::summarize(
-      depth = depth_of_response(value),
-      depth_br = best_response(value),
-      duration = response_dur(!!sym(time_var), value),
-      start = response_start(!!sym(time_var), value),
-      end = response_end(!!sym(time_var), value),
-      exists = response_exists(!!sym(time_var), value),
-      endures = response_endures(!!sym(time_var), value),
-      ttb120 = ttb120(!!sym(time_var), value),
-      .groups = "drop"
-    )
-}
 
 
 #' Generate predictions for new imaginary subjects from each group
@@ -171,15 +144,138 @@ group_pred_input <- function(fit, group_var, t_pred, time_var) {
   newdat
 }
 
-#' Example implementation of plotting trajectory metrics.
+
+
+
+#' Visualize depth of response
 #'
 #' @export
-#' @param df A full long data frame returned by
-#' \code{\link{trajectory_metrics}}.
-#' @param group_var Name of grouping variable.
-#' @param metric Name of the metric. See possible metric names in
-#' documentation of \code{\link{trajectory_metrics}}.
-plot_metric <- function(df, metric = "depth", group_var = "arm") {
-  ggplot(df, aes(x = !!sym(group_var), y = !!sym(metric))) +
-    ggdist::stat_slabinterval()
+#' @param te A list returned by \code{\link{treatment_effect}}.
+#' @inheritParams plot_rvar_df
+#' @inheritParams plot_dur
+#' @param ... arguments passed to ggdist
+plot_dor <- function(te, halfeye = FALSE, control_group_name = NULL,
+                     ...) {
+  depth <- te$depth
+  if (!is.null(control_group_name)) {
+    depth <- dor_diff(depth, control_group_name)
+    lab <- "value - control"
+  } else {
+    lab <- "value"
+  }
+  plot_rvar_arm(depth, "depth",
+    horizontal = FALSE,
+    halfeye = halfeye, ...
+  ) + ylab(lab)
+}
+
+#' Visualize duration of response
+#'
+#' @export
+#' @param te A list returned by \code{\link{treatment_effect}}.
+#' @param only_responding Compute only for the trajectories that have response.
+#' Currently not implemented!
+#' @inheritParams plot_rvar_df
+#' @param metric Can be one of \code{"duration"}, \code{"start"}, \code{"end"},
+#' or \code{"TTB120"}.
+#' @param control_group_name If given, the values are differences to control,
+#' or proportion of samples larger than control (out of non-equal samples) if
+#' \code{gt = TRUE}.
+#' @param ... arguments passed to \code{ggdist}.
+plot_dur <- function(te, only_responding = FALSE,
+                     metric = "duration", halfeye = FALSE,
+                     control_group_name = NULL, ...) {
+  gtr <- function(x) unlist_rvar(lapply(x, function(x) x[metric]))
+  ok <- c("duration", "start", "end", "TTB120")
+  checkmate::assert_choice(metric, choices = ok)
+  if (only_responding) {
+    stop("not implemented")
+    # does not work
+    # plotter <- function(x) plot_rvar_arm(gtr(x$duration_responding), "duration")
+  }
+  dur <- te$duration
+  if (!is.null(control_group_name)) {
+    dur <- dur_diff(dur, control_group_name)
+    lab <- "value - control"
+  } else {
+    lab <- "value"
+  }
+  plot_rvar_arm(gtr(dur), metric,
+    horizontal = TRUE, halfeye = halfeye, ...
+  ) + xlab(lab)
+}
+
+#' Get duration differences to control
+#'
+#' @export
+#' @param dur List of duration \code{rvar} vectors.
+#' @param control_group_name Control arm name.
+#' @param gt See the \code{control_group_name} argument.
+#' @return \itemize{
+#' \item A list with \code{rvar}s that are differences to control, or
+#' \item if \code{gt = TRUE}, matrix with number of rows equal to number of
+#' arms, where elements are for the proportion of samples larger than control
+#' (out of non-equal samples)
+#' }
+dur_diff <- function(dur, control_group_name = NULL, gt = FALSE) {
+  if (is.null(control_group_name)) {
+    control_group_name <- names(dur)[1]
+  }
+  dur_diff <- list()
+  if (gt) {
+    dur_diff <- c()
+  }
+  for (d in 1:length(dur)) {
+    a <- dur[[d]]
+    b <- dur[[control_group_name]]
+    if (gt) {
+      r <- sum(a > b) / sum(a != b)
+    } else {
+      r <- a - b
+    }
+    if (gt) {
+      dur_diff <- rbind(dur_diff, r)
+    } else {
+      dur_diff[[d]] <- r
+    }
+  }
+  if (gt) {
+    rownames(dur_diff) <- names(dur)
+  } else {
+    names(dur_diff) <- names(dur)
+  }
+  dur_diff
+}
+
+#' Get duration differences to control
+#'
+#' @export
+#' @param dor Vector of depth \code{rvar}s.
+#' @inheritParams dur_diff
+dor_diff <- function(dor, control_group_name = NULL, gt = FALSE) {
+  if (is.null(control_group_name)) {
+    control_group_name <- names(dor)[1]
+  }
+  a <- dor
+  b <- dor[[control_group_name]]
+  if (gt) {
+    diff <- sum(a > b) / sum(a != b)
+  } else {
+    diff <- a - b
+  }
+  diff
+}
+
+#' Summarize duration of response
+#'
+#' @export
+#' @inheritParams plot_dur
+summarize_dur <- function(te, only_responding = FALSE) {
+  a <- te$duration
+  if (only_responding) {
+    a <- te$duration_responding
+  }
+  df <- data.frame(sapply(a, function(x) as.character(x)))
+  colnames(df) <- names(a)
+  df
 }

@@ -28,6 +28,7 @@ FunctionDraws <- R6::R6Class("FunctionDraws",
     quantiles_df_full = function(ci_inner, ci_outer) {
       get_q <- function(x, p) {
         f <- as.vector(stats::quantile(x, probs = p))
+        # scale
       }
       p_in_low <- (1 - ci_inner) / 2
       p_in_up <- 1 - p_in_low
@@ -54,8 +55,6 @@ FunctionDraws <- R6::R6Class("FunctionDraws",
       checkmate::assert_character(name, min.chars = 1)
       checkmate::assert_class(input, "data.frame")
       checkmate::assert_class(output, "rvar")
-      checkmate::assert_true(length(dim(input)) == 2)
-      checkmate::assert_true(length(dim(output)) == 1)
       checkmate::assert_true(nrow(input) == length(output))
       private$input <- input
       private$output <- output # rvar
@@ -109,29 +108,7 @@ FunctionDraws <- R6::R6Class("FunctionDraws",
     },
 
     #' @description
-    #' Get the input and output as \code{data.frame} with an \code{rvar}
-    #' column.
-    as_data_frame = function() {
-      value <- self$get_output()
-      cbind(self$get_input(), value)
-    },
-
-    #' @description
-    #' Get the input and output as a long \code{data.frame} with each draw
-    #' stacked on top of each other.
-    as_data_frame_long = function() {
-      S <- self$num_draws()
-      N <- self$num_points()
-      row_idx <- rep(1:N, each = S)
-      draw_idx <- rep(1:S, times = N)
-      df <- self$get_input()[row_idx, ]
-      df[[".draw_idx"]] <- as.factor(draw_idx)
-      df$value <- as.vector(self$get_output(as_matrix = TRUE))
-      df
-    },
-
-    #' @description
-    #' Create (a possibly filtered) data frame for ggplot.
+    #' Create (a possibly filtered) data frame for ggplot
     #' @param ci_inner inner credible interval
     #' @param ci_outer outer credible interval
     #' @param filter_by filtering variable
@@ -339,6 +316,49 @@ FunctionDraws <- R6::R6Class("FunctionDraws",
     },
 
     #' @description
+    #' Depth of response for each group
+    #'
+    #' @param group_var Name of the group variable. NOTE: assumes that
+    #' there is only one subject for each group, in which case the group
+    #' variable is effectively the id variable.
+    #' @param br Use best response definition? If
+    #' \itemize{
+    #'   \item \code{TRUE}, the is depth based on minimum after
+    #'   baseline, which can result in negative depth for growing trajectories.
+    #'   \item \code{FALSE} (default), then minimum is computed with baseline
+    #'   value included, meaning that the depth is 0 for growing
+    #'   trajectories
+    #' }
+    dor = function(group_var = NULL, br = FALSE) {
+      if (is.null(group_var)) {
+        stop("group_var must be given")
+      }
+      depth_of_response_functiondraws(self, group_var, br = br)
+    },
+
+    #' @description
+    #' Duration of response for each group
+    #'
+    #' @param group_var Name of the group variable. NOTE: assumes that
+    #' there is only one subject for each group, in which case the group
+    #' variable is effectively the id variable.
+    #' @param time_var Name of the time variable.
+    #' @param  only_responding Should the metrics be computed only for the draws
+    #' where a response exists?
+    dur = function(group_var = NULL, time_var = NULL, only_responding = FALSE) {
+      if (is.null(group_var)) {
+        stop("group_var must be given")
+      }
+      if (is.null(time_var)) {
+        stop("time_var must be given")
+      }
+      duration_of_response_functiondraws(
+        self, group_var, time_var,
+        only_responding
+      )
+    },
+
+    #' @description
     #' Offset every function draw so that they start from zero
     #' @return a new object of class \code{\link{FunctionDraws}}
     zero_offset = function() {
@@ -347,21 +367,12 @@ FunctionDraws <- R6::R6Class("FunctionDraws",
     },
 
     #' @description
-    #' Split to groups
-    #' @return a list of objects of class \code{\link{FunctionDraws}},
-    #' one for each group/id
-    #' @param id_var Name of the subject identifier factor.
-    split_by_id = function(id_var) {
-      split_to_subjects(self, id_var)
-    },
-
-    #' @description
     #' Offset every function draw for each subject so that they start from zero
     #' @return a new object of class \code{\link{FunctionDraws}}
     #' @param id_var Name of the subject identifier factor.
     zero_offset_by_id = function(id_var) {
       checkmate::assert_character(id_var, min.chars = 1)
-      splits <- self$split_by_id(id_var)
+      splits <- split_to_subjects(self, id_var)
       out <- splits[[1]]$zero_offset()$get_output()
       inp <- splits[[1]]$get_input()
       id_new <- rep(names(splits)[1], nrow(inp))
@@ -400,11 +411,15 @@ FunctionDraws <- R6::R6Class("FunctionDraws",
   f1$subtract(f2)
 }
 
-# Split function draws to groups by id
+
+# Create trajectories for each subject
+# NOTE: assumes that
+# there is only one subject for each group, in which case the group
+# variable is effectively the id variable.
 split_to_subjects <- function(fd, id_var) {
   inp <- fd$get_input()
   out <- fd$get_output()
-  levs <- unique(inp[[id_var]])
+  levs <- levels(inp[[id_var]])
   ret <- list()
   j <- 0
   ids_found <- c()

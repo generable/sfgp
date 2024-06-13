@@ -9,16 +9,16 @@ sfsim(
   n2 = 4,
   n3 = 4,
   ts0_scale = 20,
-  mu_log_ks = c(3, 1.5, -1),
-  mu_log_kg = c(-2, 0, 2),
-  times = c(0.5, 3, 6, 12, 24, 48)/48,
-  kg_sd = 0.05,
-  ks_sd = 0.05,
+  mu_ks = c(0.01, 2, 4),
+  mu_kg = c(3, 1.5, 0.05),
+  times = c(0.5, 3, 6, 12, 24, 48),
+  kg_sd = 0.2,
+  ks_sd = 0.2,
   sigma = 0.2,
   x_effect = 0,
-  log_C_kg = -2,
-  log_C_ks = -1,
-  t_sd = 0.02
+  log_C_kg = -7,
+  log_C_ks = -5,
+  t_sd = 0.2
 )
 }
 \arguments{
@@ -31,9 +31,9 @@ sfsim(
 \item{ts0_scale}{initial tumor sizes will be sampled from the uniform
 distribution \code{ts0_scale * U(1,3)}}
 
-\item{mu_log_ks}{Mean log \code{k_s} parameters for the three arms.}
+\item{mu_ks}{Mean \code{k_s} parameters for the three arms.}
 
-\item{mu_log_kg}{Mean log \code{k_g} parameters for the three arms.}
+\item{mu_kg}{Mean \code{k_g} parameters for the three arms.}
 
 \item{times}{Time points where measurements are made. Scatter is added to
 these.}

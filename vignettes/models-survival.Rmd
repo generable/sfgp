@@ -17,20 +17,29 @@ knitr::opts_chunk$set(
 ## Setup
 
 ```{r setup}
+# library(devtools)
+# Sys.setenv(GITHUB_PAT = "")
+# devtools::install_github("sambrilleman/simjm")
+library(simjm)
 library(sfgp)
 library(ggplot2)
 ```
 
+
+## Details
+
+Survival likelihood is
+
 ## Data simulation
 
-The data has been simulated using `simjm`. Here we just load it.
-
 ```{r sim, fig.width=7, fig.height=5}
-# data <- simjm(
-#  n = 30, fixed_trajectory = "quadratic",
-#  max_fuptime = 15
-# )
-data <- example_data_jm
+data <- simjm(
+  n = 30, fixed_trajectory = "quadratic",
+  max_fuptime = 15
+)
+print(attr(data, "params"))
+plot(data)
+plot_traj(yvar = "Yij_1", data = data$Long1)
 ```
 
 ## Format data for sfgp
@@ -39,7 +48,7 @@ data <- example_data_jm
 ### Longitudinal data
 
 ```{r format-lon}
-dat_lon <- data$lon[, c("id", "Z1", "Z2", "tij", "Yij_1")]
+dat_lon <- data$Long1[, c("id", "Z1", "Z2", "tij", "Yij_1")]
 dat_lon$id <- as.factor(dat_lon$id)
 dat_lon$Z1 <- as.factor(dat_lon$Z1)
 colnames(dat_lon) <- c("id", "z", "x", "t", "y")
@@ -49,7 +58,7 @@ head(dat_lon)
 ### Time-to-event data
 
 ```{r format-tte}
-dat_tte <- data$tte[, c("id", "Z1", "Z2", "eventtime", "status")]
+dat_tte <- data$Event[, c("id", "Z1", "Z2", "eventtime", "status")]
 dat_tte$id <- as.factor(dat_tte$id)
 dat_tte$Z1 <- as.factor(dat_tte$Z1)
 dat_tte$status <- as.logical(dat_tte$status)

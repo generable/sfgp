@@ -18,8 +18,6 @@ The 'FunctionDraws' class
 \item \href{#method-FunctionDraws-rename}{\code{FunctionDraws$rename()}}
 \item \href{#method-FunctionDraws-get_input}{\code{FunctionDraws$get_input()}}
 \item \href{#method-FunctionDraws-get_output}{\code{FunctionDraws$get_output()}}
-\item \href{#method-FunctionDraws-as_data_frame}{\code{FunctionDraws$as_data_frame()}}
-\item \href{#method-FunctionDraws-as_data_frame_long}{\code{FunctionDraws$as_data_frame_long()}}
 \item \href{#method-FunctionDraws-quantiles_df}{\code{FunctionDraws$quantiles_df()}}
 \item \href{#method-FunctionDraws-print}{\code{FunctionDraws$print()}}
 \item \href{#method-FunctionDraws-plot}{\code{FunctionDraws$plot()}}
@@ -28,8 +26,9 @@ The 'FunctionDraws' class
 \item \href{#method-FunctionDraws-subtract}{\code{FunctionDraws$subtract()}}
 \item \href{#method-FunctionDraws-log}{\code{FunctionDraws$log()}}
 \item \href{#method-FunctionDraws-exp}{\code{FunctionDraws$exp()}}
+\item \href{#method-FunctionDraws-dor}{\code{FunctionDraws$dor()}}
+\item \href{#method-FunctionDraws-dur}{\code{FunctionDraws$dur()}}
 \item \href{#method-FunctionDraws-zero_offset}{\code{FunctionDraws$zero_offset()}}
-\item \href{#method-FunctionDraws-split_by_id}{\code{FunctionDraws$split_by_id()}}
 \item \href{#method-FunctionDraws-zero_offset_by_id}{\code{FunctionDraws$zero_offset_by_id()}}
 \item \href{#method-FunctionDraws-clone}{\code{FunctionDraws$clone()}}
 }
@@ -132,32 +131,10 @@ Get the output \code{rvar}.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FunctionDraws-as_data_frame"></a>}}
-\if{latex}{\out{\hypertarget{method-FunctionDraws-as_data_frame}{}}}
-\subsection{Method \code{as_data_frame()}}{
-Get the input and output as \code{data.frame} with an \code{rvar}
-column.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FunctionDraws$as_data_frame()}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FunctionDraws-as_data_frame_long"></a>}}
-\if{latex}{\out{\hypertarget{method-FunctionDraws-as_data_frame_long}{}}}
-\subsection{Method \code{as_data_frame_long()}}{
-Get the input and output as a long \code{data.frame} with each draw
-stacked on top of each other.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FunctionDraws$as_data_frame_long()}\if{html}{\out{</div>}}
-}
-
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FunctionDraws-quantiles_df"></a>}}
 \if{latex}{\out{\hypertarget{method-FunctionDraws-quantiles_df}{}}}
 \subsection{Method \code{quantiles_df()}}{
-Create (a possibly filtered) data frame for ggplot.
+Create (a possibly filtered) data frame for ggplot
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{FunctionDraws$quantiles_df(
   ci_inner = 0.5,
@@ -311,6 +288,58 @@ Exponentiate function draws.
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FunctionDraws-dor"></a>}}
+\if{latex}{\out{\hypertarget{method-FunctionDraws-dor}{}}}
+\subsection{Method \code{dor()}}{
+Depth of response for each group
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FunctionDraws$dor(group_var = NULL, br = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{group_var}}{Name of the group variable. NOTE: assumes that
+there is only one subject for each group, in which case the group
+variable is effectively the id variable.}
+
+\item{\code{br}}{Use best response definition? If
+\itemize{
+  \item \code{TRUE}, the is depth based on minimum after
+  baseline, which can result in negative depth for growing trajectories.
+  \item \code{FALSE} (default), then minimum is computed with baseline
+  value included, meaning that the depth is 0 for growing
+  trajectories
+}}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-FunctionDraws-dur"></a>}}
+\if{latex}{\out{\hypertarget{method-FunctionDraws-dur}{}}}
+\subsection{Method \code{dur()}}{
+Duration of response for each group
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{FunctionDraws$dur(group_var = NULL, time_var = NULL, only_responding = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{group_var}}{Name of the group variable. NOTE: assumes that
+there is only one subject for each group, in which case the group
+variable is effectively the id variable.}
+
+\item{\code{time_var}}{Name of the time variable.}
+
+\item{\code{only_responding}}{Should the metrics be computed only for the draws
+where a response exists?}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-FunctionDraws-zero_offset"></a>}}
 \if{latex}{\out{\hypertarget{method-FunctionDraws-zero_offset}{}}}
 \subsection{Method \code{zero_offset()}}{
@@ -321,27 +350,6 @@ Offset every function draw so that they start from zero
 
 \subsection{Returns}{
 a new object of class \code{\link{FunctionDraws}}
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-FunctionDraws-split_by_id"></a>}}
-\if{latex}{\out{\hypertarget{method-FunctionDraws-split_by_id}{}}}
-\subsection{Method \code{split_by_id()}}{
-Split to groups
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{FunctionDraws$split_by_id(id_var)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{id_var}}{Name of the subject identifier factor.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-a list of objects of class \code{\link{FunctionDraws}},
-one for each group/id
 }
 }
 \if{html}{\out{<hr>}}

@@ -14,8 +14,6 @@ See the following \code{R6} classes.
 \itemize{
  \item \code{\link{TSModel}}: Main model class.
  \item \code{\link{TSModelFit}}: Fit class.
- \item \code{\link{JointModel}}: Main model class.
- \item \code{\link{JointModelFit}}: Fit class.
  \item \code{\link{TermList}}: Class describing model terms.
  \item \code{\link{FunctionDraws}}: Class to hold fitted function
  distributions.
@@ -26,8 +24,14 @@ See the following \code{R6} classes.
 
 The data that you wish to analyze with 'sfgp' should be in an \R
 \code{data.frame} where columns correspond to measured variables and rows
-correspond to observations. Categorical variables should be \code{factor}s
-and continuous ones should be \code{numeric}.
+correspond to observations.
+}
+
+\section{Vignettes}{
+
+\itemize{
+ \item Simple GP model: How to create a fit a simple GP model.
+}
 }
 
 \author{

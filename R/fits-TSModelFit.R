@@ -9,6 +9,18 @@ TSModelFit <- R6::R6Class("TSModelFit",
     # Extract one component as 'rvar'
     extract_f_comp = function(f_name = "f") {
       self$draws(name = f_name)
+    },
+
+    restore = function(path) {
+      if (!fs::dir_exists(path)) {
+        stop(glue::glue('path {path} does not exist.'))
+      }
+      model <- readRDS(fs::path(path, 'model.rds'))
+      datasets <- readRDS(fs::path(path, 'datasets.rds'))
+      stan_fit <- readRDS(fs::path(path, 'stan_fit.rds'))
+      stan_data <- readRDS(fs::path(path, 'stan_data.rds'))
+      term_confs <- readRDS(fs::path(path, 'term_confs.rds'))
+      self$initialize(model, stan_fit, datasets, stan_data, term_confs)
     }
   ),
   public = list(
@@ -23,14 +35,35 @@ TSModelFit <- R6::R6Class("TSModelFit",
     #' @param stan_data The created 'Stan' data. Stored mainly for easier
     #' debugging.
     #' @param term_confs The term configurations used.
-    initialize = function(model, stan_fit, datasets, stan_data, term_confs) {
-      self$term_confs <- term_confs
-      super$initialize(model, stan_fit, datasets, stan_data)
+    initialize = function(model, stan_fit, datasets, stan_data, term_confs, from_path=NULL) {
+      if (!is.null(from_path)) {
+        private$restore(from_path)
+      } else {
+        self$term_confs <- term_confs
+        super$initialize(model, stan_fit, datasets, stan_data)
+      }
     },
 
     #' @description Print object description.
     print = function() {
       cat("An R6 object of class TSModelFit.\n")
+    },
+
+    #' @description Write objects components to a directory safely
+    save = function(path, force = FALSE) {
+      if (fs::dir_exists(path)) {
+        if (isFALSE(force)) {
+          askYesNo('Directory exists. Replace?')
+        }
+        fs::dir_delete(path)
+      }
+      fs::dir_create(path, recurse = TRUE)
+
+      saveRDS(private$model, fs::path(path, 'model.rds'))
+      saveRDS(private$datasets, fs::path(path, 'datasets.rds'))
+      private$stan_fit$save_object(fs::path(path, 'stan_fit.rds'))
+      saveRDS(private$stan_data, fs::path(path, 'stan_data.rds'))
+      saveRDS(self$term_confs, fs::path(path, 'term_confs.rds'))
     },
 
     #' @description
@@ -44,9 +77,10 @@ TSModelFit <- R6::R6Class("TSModelFit",
     #' if \code{component="f_sum"} or \code{component="y_log_pred"}.
     #' @param data_scale Transform to data scale? Has no effect if
     #' extracting a single component.
+    #' @param extra_covs char vector of extra fields to include with draws
     #' @param dataname name of data set used to evaluate the function
     function_draws = function(component = "f_sum", data_scale = TRUE,
-                              capped = FALSE) {
+                              capped = FALSE, extra_covs = c()) {
       mod <- self$get_model("lon")
       dat <- self$get_data("LON")
       if (is.numeric(component)) {
@@ -69,7 +103,7 @@ TSModelFit <- R6::R6Class("TSModelFit",
         }
         f <- private$extract_f_comp(f_name)
         covs <- mod$term_list$input_vars()
-        x <- dat[, covs, drop = FALSE]
+        x <- dat[, unique(c(covs, extra_covs)), drop = FALSE]
         fd <- FunctionDraws$new(x, f, f_name)
       } else {
         if (data_scale) {

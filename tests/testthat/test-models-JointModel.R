@@ -5,7 +5,7 @@ test_that("creating and fitting a JointModel works", {
   expect_output(print(m), "Longitudinal submodel")
 
   # Create data
-  t <- c(55, 55, 60, 50, 60, 60) / 60
+  t <- c(55, 55, 60, 50, 60, 60)
   event <- as.logical(c(1, 1, 0, 1, 0, 0))
   subject <- as.factor(c(1, 2, 3, 4, 5, 6))
   dat_tte <- data.frame(subject, t, event)
@@ -39,7 +39,7 @@ test_that("creating and fitting a JointModel works", {
   expect_s3_class(plt2, "ggplot")
 
   # Predict dense in time
-  t_test <- seq(0, 65, by = 2) / 60
+  t_test <- seq(0, 50, by = 2)
   pp <- fit$predict_time(t_test)
 
   # Smooth plot

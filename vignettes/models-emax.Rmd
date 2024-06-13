@@ -1,0 +1,78 @@
+---
+title: "Testing the Emax model"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Testing the Emax model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(sfgp)
+library(ggplot2)
+```
+
+# Simulating data
+
+```{r sim, fig.width=7, fig.height=5}
+sim_emax <- function(x, e0, emax, ed50, gamma, sigma) {
+  xg <- x^gamma
+  f <- e0 + (emax * xg) / (ed50^gamma + xg)
+  y <- exp(f + sigma * rnorm(length(f)))
+  data.frame(x = x, f = f, y = y)
+}
+
+gamma <- 10
+e0 <- 3
+x <- seq(0, 400, by = 4)
+df1 <- sim_emax(x, e0, 3, 160, gamma, 0.25)
+df2 <- sim_emax(x, e0, 3, 260, gamma, 0.25)
+df3 <- sim_emax(x, e0, 3, 160, gamma, 0.25)
+df4 <- sim_emax(x, e0, 3, 260, gamma, 0.25)
+
+df1$dose <- df1$x
+df2$dose <- df2$x
+df3$dose <- df3$x
+df4$dose <- df4$x
+
+df <- rbind(df1, df2, df3, df4)
+df$id <- as.factor(rep(1:4, each = nrow(df1)))
+df$mutation <- as.factor(rep(rep(0:1, each = nrow(df1)), 2))
+ggplot(df, aes(x = dose, y = y, group = id, color = mutation)) +
+  geom_point() +
+  facet_wrap(. ~ id)
+```
+
+# Fitting a model
+
+```{r fit}
+m <- TSModel$new(y ~ emax(x, mutation))
+fit <- m$fit(data = df, chains = 1)
+```
+
+# Studying the fit
+
+```{r, fig.width=7, fig.height=5}
+fit$function_draws()$log()$plot(facet_by = "id")
+fit$plot(capped = FALSE, facet_by = "id")
+```
+
+
+```{r}
+print(fit$draws("gamma"))
+print(exp(fit$draws("log_ED50")))
+print(fit$draws("Emax"))
+print(exp(fit$draws("offset_id")))
+```
+
+# Used Stan code
+```{r}
+cat(m$create_stancode())
+```

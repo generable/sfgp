@@ -10,7 +10,8 @@ treatment_effect(
   time_var = "t",
   t_pred = NULL,
   group_var = "arm",
-  method = "new_sub"
+  method = "new_sub",
+  br = FALSE
 )
 }
 \arguments{
@@ -23,7 +24,8 @@ treatment_effect(
 
 \item{t_pred}{Vector of time points (in days). Chosen based on data range
 if \code{t_pred=NULL}. Chosen to be an evenly spaced vector from
-0 to at most 2 years every 8 weeks if \code{t_pred="auto"}.}
+0 to at most 2 years every 8 weeks if \code{t_pred="auto"}. If
+\code{t_pred=NULL}, it will be changed to \code{"auto"} if \code{br=TRUE}.}
 
 \item{group_var}{grouping variable}
 
@@ -32,6 +34,9 @@ if \code{t_pred=NULL}. Chosen to be an evenly spaced vector from
  \item \code{new_sub}: Simulating new imaginary subjects
  \item \code{group_est}: Using group-level parameter estimates
 }}
+
+\item{br}{Use best response definition of depth? See the \code{dor}
+method of the \code{FunctionDraws} class.}
 }
 \description{
 Analyse treatment effect

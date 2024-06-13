@@ -29,30 +29,30 @@ depth_of_response <- function(y) {
   C / A
 }
 
-# Duration
-response_dur <- function(t, y) {
-  d <- duration_of_response(t, y)
-  d$end - d$start
+# Depth of response from an rvars trajectory
+depth_of_response_rvar <- function(y, br = FALSE) {
+  ymat <- posterior::as_draws_matrix(posterior::merge_chains(y))
+  D <- posterior::ndraws(ymat)
+  dor <- rep(0, D)
+  for (d in seq_len(D)) {
+    x <- as.vector(ymat[d, ])
+    if (br) {
+      dor[d] <- best_response(x) # can be negative, max 1
+    } else {
+      dor[d] <- depth_of_response(x) # between [0,1]
+    }
+  }
+  posterior::rvar(dor)
 }
 
-# Duration
-response_end <- function(t, y) {
-  duration_of_response(t, y)$end
-}
-
-# Duration
-response_start <- function(t, y) {
-  duration_of_response(t, y)$start
-}
-
-# Duration
-response_exists <- function(t, y) {
-  duration_of_response(t, y)$response_exists
-}
-
-# Duration
-response_endures <- function(t, y) {
-  duration_of_response(t, y)$response_endures
+# Depth of response from a FunctionDraws
+depth_of_response_functiondraws <- function(fd, id_var, br = FALSE) {
+  a <- split_to_subjects(fd, id_var)
+  getr <- function(x) {
+    depth_of_response_rvar(x$get_output(), br = br)
+  }
+  rvar_list <- lapply(a, getr)
+  unlist_rvar(rvar_list)
 }
 
 # Duration of response from a single trajectory
@@ -103,6 +103,49 @@ duration_of_response <- function(t, y) {
   )
 }
 
+# Duration of response from an rvars trajectory
+duration_of_response_rvars <- function(t, y, only_responding = FALSE) {
+  ymat <- posterior::as_draws_matrix(posterior::merge_chains(y))
+  D <- posterior::ndraws(ymat)
+  exists <- rep(0, D)
+  endures <- rep(0, D)
+  start <- rep(0, D)
+  end <- rep(0, D)
+  TTB120 <- rep(0, D)
+  for (d in seq_len(D)) {
+    x <- as.vector(ymat[d, ])
+    ret <- duration_of_response(t, x)
+    exists[d] <- as.numeric(ret$response_exists)
+    endures[d] <- as.numeric(ret$response_endures)
+    start[d] <- ret$start
+    end[d] <- ret$end
+    TTB120[d] <- ttb120(t, x)
+  }
+  duration <- end - start
+
+  # filter and return
+  mat <- cbind(exists, endures, duration, start, end, TTB120)
+  if (only_responding) {
+    idx_rows <- which(mat[, 1] == 1)
+    mat <- mat[idx_rows, , drop = F]
+  }
+  posterior::rvar(mat)
+}
+
+# Duration of response from a functiondraws
+duration_of_response_functiondraws <- function(fd, id_var, time_var,
+                                               only_responding) {
+  a <- split_to_subjects(fd, id_var)
+  getr <- function(x) {
+    t <- x$get_input()[[time_var]]
+    y <- x$get_output()
+    duration_of_response_rvars(t, y, only_responding)
+  }
+  rvar_list <- lapply(a, getr)
+  rvar_list
+}
+
+
 # Plot trajectory and indicate response start and end
 trajectory_plot <- function(t, y) {
   dur <- duration_of_response(t, y)
@@ -124,4 +167,18 @@ trajectory_plot <- function(t, y) {
     geom_vline(xintercept = dur$start, color = "steelblue3") +
     geom_vline(xintercept = dur$end, color = "firebrick") +
     geom_vline(xintercept = TTB, color = "orange")
+}
+
+# need to do this because 'unlist()' doesn't work for a list of rvars
+unlist_rvar <- function(rvar_list) {
+  nams <- names(rvar_list)
+  J <- length(rvar_list)
+  out <- rvar_list[[1]]
+  if (J > 1) {
+    for (j in 2:J) {
+      out <- c(out, rvar_list[[j]])
+    }
+  }
+  names(out) <- nams
+  out
 }

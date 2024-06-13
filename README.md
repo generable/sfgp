@@ -16,8 +16,6 @@ access token](https://github.com/settings/tokens?type=beta).
 remotes::install_github("generable/sfgp", ref = "main", build_vignettes = TRUE)
 ```
 
-Building the vignettes can take rather long, so consider using `build_vignettes = FALSE`.
-
 ## Getting started
 
  More info is in documentation, that you can view with

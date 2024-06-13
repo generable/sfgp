@@ -20,7 +20,7 @@ OffsetTerm <- R6::R6Class("OffsetTerm",
     latex_type = "BAS"
   ),
   public = list(
-    prior_intercept = "student_t(4, 0, 5)",
+    prior_intercept = "student_t(20, 0, 1)",
     initialize = function() {
       private$suffix <- "0"
       private$typename <- "baseline"

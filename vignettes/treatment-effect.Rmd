@@ -27,7 +27,6 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(ggplot2)
 library(sfgp)
-library(dplyr)
 ```
 
 # Simulated data
@@ -115,13 +114,11 @@ $$
 $$
 
 ### Example
-```{r dor, fig.width = 7.2, fig.height = 3.3}
+```{r dor}
 # Depth of response
-dor <- te$metrics %>%
-  group_by(arm) %>%
-  summarize(mean = mean(depth))
-print(dor)
-plot_metric(te$metrics, "depth")
+dor <- te$traj$dor(group_var = "arm")
+plot_dor(te)
+dor
 ```
 
 ## Duration of response
@@ -164,39 +161,30 @@ $$
 and $T$ if the condition is not satisfied on the interval $(0, T)$.
 
 ### Example
-```{r dur, fig.width = 7.2, fig.height = 3.3}
+```{r dur}
 # Duration of response
-dur <- te$metrics %>%
-  group_by(arm) %>%
-  summarize(mean = mean(duration))
-print(dur)
-plot_metric(te$metrics, "duration")
-plot_metric(te$metrics, "ttb120")
+plot_dur(te)
+plot_dur(te, metric = "TTB120")
+summarize_dur(te)
 ```
 
 We can compute the metrics only for the trajectories for which the 
 response exists like so
 
 ```{r durfilt}
-# Compute proportion of trajectories where response exists
-p_responding <- te$metrics %>%
-  group_by(arm) %>%
-  summarize(mean = mean(exists))
-print(p_responding)
-
 # Duration of response, for those new subjects that are responding
-te$metrics %>%
-  group_by(arm) %>%
-  filter(exists) %>%
-  summarize(mean = mean(duration))
+summarize_dur(te, only_responding = TRUE)
 ```
 
 ## Distribution of the difference to control
 
-We can plot the difference to control arm.
+By giving the `control_group_name` argument, we can plot the difference
+to control arm.
 
 ```{r diff_control}
-# TODO
+ca <- "1"
+plot_dor(te, halfeye = TRUE, control_group_name = ca)
+plot_dur(te, halfeye = TRUE, control_group_name = ca)
 ```
 
 ## Probability of difference to control
@@ -209,7 +197,10 @@ $$
 where $x_a, x_b$ are the values of some metric for arms $a$ and $b$, respectively.
 
 ```{r p_diff_control}
-# TODO
+d1 <- dor_diff(te$depth, control_group_name = ca, gt = T)
+print(d1)
+d2 <- dur_diff(te$duration, control_group_name = ca, gt = T)
+print(d2)
 ```
 
 ## Invariance of metrics under trajectory scaling
@@ -252,11 +243,14 @@ te2 <- treatment_effect(fit_post, fit_prior,
 te2$traj$plot()
 
 # Depth of response
-dor2 <- te2$metrics %>%
-  group_by(arm) %>%
-  summarize(mean = mean(depth))
-print(dor2)
-plot_metric(te2$metrics, "depth")
+dor <- te2$traj$dor(group_var = "arm")
+plot_dor(te2)
+dor
+
+# Duration of response
+plot_dur(te2)
+plot_dur(te2, metric = "TTB120")
+summarize_dur(te2)
 ```
 
 ## Using an alternative definition of depth
@@ -274,20 +268,18 @@ $$
 which will be negative for trajectories that never go below baseline.
 
 ```{r te3, fig.width = 7.2, fig.height = 3.3}
-t_pred <- seq(0, 46, by = 1 * 7) / 46 # expected measurement every week
+t_pred <- seq(0, 46, by = 1 * 7) # expected measurement every week
 te3 <- treatment_effect(fit_post, fit_prior,
   time_var = "t", group_var = "arm",
-  t_pred = t_pred
+  br = TRUE, t_pred = t_pred
 )
 
 te3$traj$plot()
 
 # Depth of response
-dor3 <- te3$metrics %>%
-  group_by(arm) %>%
-  summarize(mean = mean(depth_br))
-print(dor3)
-plot_metric(te3$metrics, "depth_br")
+dor <- te3$traj$dor(group_var = "arm")
+plot_dor(te3)
+dor
 ```
 
 # References

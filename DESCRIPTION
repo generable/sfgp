@@ -1,7 +1,7 @@
 Package: sfgp
 Type: Package
 Title: Additive semiparametric modeling
-Version: 0.3.0
+Version: 0.2.4.9003
 Author: Juho Timonen.
 Maintainer: Juho Timonen <juho.timonen@iki.fi>
 Description: Additive semiparametric regression modeling with joint longitudinal
@@ -26,9 +26,7 @@ Imports:
     ggdist (>= 3.3.1),
     processx (>= 3.5.2),
     stringr (>= 1.5.0),
-    ggpubr (>= 0.6.0),
-    dplyr (>= 1.1.4),
-    magrittr(>= 2.0.3)
+    ggpubr (>= 0.6.0)
 Suggests:
     covr,
     knitr,

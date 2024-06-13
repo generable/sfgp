@@ -123,18 +123,27 @@ test_that("grouped sf models work and predicting works", {
   dat1 <- add_sff_input(dat, m1)
 
   expect_output(cat(m1$term_list$latex()), "alpha")
+  f1_alt <- m1$fit(dat1, chains = 1, skip_transform = "f_log_sff_t")
   f1 <- m1$fit(dat1, chains = 1)
 
+  m2 <- TSModel$new(y ~ sf(t, id | arm))
+  dat2 <- add_sff_input(dat, m2)
+  f2 <- m2$fit(dat2, chains = 1)
+
   expect_s3_class(f1$plot(), "ggplot")
+  expect_s3_class(f1_alt$plot(), "ggplot")
+  expect_s3_class(f2$plot(), "ggplot")
   expect_error(m1$term_list$get_term("foo"), "is not a Stan variable name")
+  expect_error(m2$term_list$get_term("foo"), "is not a Stan variable name")
 
-  pred1 <- f1$predict_time(seq(0, 1.2, by = 0.05))
+  pred1 <- f1$predict_time(seq(0, 58, by = 1))
+  pred2 <- f1$predict_time(seq(50, 58, by = 1))
   p1 <- pred1$plot(plot_y = FALSE)
+  p2 <- pred2$plot(plot_y = FALSE)
 
-  # Should be mean-zero
-  plt_gp <- pred1$function_draws("f_gp_t")$plot()
-  expect_s3_class(plt_gp, "ggplot")
-
+  p1_alt <- p1 + ggplot2::xlim(50, 58)
+  expect_s3_class(p1_alt, "ggplot") # these two should
+  expect_s3_class(p2, "ggplot") # look the same but with randomness
 
   # Check Stan data
   t_range <- range(dat$t)
@@ -142,7 +151,9 @@ test_that("grouped sf models work and predicting works", {
   expect_equal(max(sd$dat_t_unit_LON), 1)
   expect_equal(min(sd$dat_t_unit_LON), -1)
   sd_pred1 <- pred1$get_stan_data()
+  sd_pred2 <- pred2$get_stan_data()
   expect_gt(max(sd_pred1$dat_t_unit_LON), 1)
+  expect_gt(max(sd_pred2$dat_t_unit_LON), 1)
 })
 
 test_that("treatment effect estimation works", {
@@ -158,8 +169,16 @@ test_that("treatment effect estimation works", {
   te2 <- treatment_effect(fit_post, fit_prior,
     time_var = "t", group_var = "arm", method = "group_est"
   )
+  te3 <- treatment_effect(fit_post, fit_prior,
+    time_var = "t", group_var = "arm", br = TRUE
+  )
   expect_s3_class(te$traj$plot(), "ggplot")
   expect_s3_class(te2$traj$plot(), "ggplot")
+  expect_s3_class(te3$traj$plot(), "ggplot")
+  sumr1 <- summarize_dur(te)
+  sumr2 <- summarize_dur(te, only_responding = TRUE)
+  expect_equal(ncol(sumr1), 3)
+  expect_equal(ncol(sumr2), 3)
 
   # SF Trajectories
   sf1 <- te$p_new$function_draws("f_log_sff_t")
@@ -167,13 +186,20 @@ test_that("treatment effect estimation works", {
   expect_s3_class(sf1$plot(), "ggplot") # these should be similar but
   expect_s3_class(sf2$plot(), "ggplot") # this should have less variation
 
+
   # Depth of response
-  plt_dor <- plot_metric(te$metrics, "depth")
+  plt_dor <- plot_dor(te, halfeye = T, .width = c(0.99, 0.95))
   expect_s3_class(plt_dor, "ggplot")
 
   # Duration of response
-  plt_dur <- plot_metric(te$metrics, "duration")
+  plt_dur <- plot_dur(te)
   expect_s3_class(plt_dur, "ggplot")
+
+  # Probability of difference
+  d1 <- dor_diff(te$depth, gt = T)
+  d2 <- dur_diff(te$duration, gt = T)
+  expect_equal(length(d1), 3)
+  expect_equal(nrow(d2), 3)
 })
 
 

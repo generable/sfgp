@@ -117,8 +117,8 @@ FormulaSFTerm <- R6::R6Class("FormulaSFTerm",
   public = list(
     term_list_kg = NULL,
     term_list_ks = NULL,
-    prior_log_C_kg = "student_t(4, -2, 4)",
-    prior_log_C_ks = "student_t(4, 0, 10)",
+    prior_log_C_kg = "normal(-4, 4)",
+    prior_log_C_ks = "normal(-3, 4)",
     prior_kg = NULL,
     prior_ks = NULL,
     initialize = function(x_name, formula_kg, formula_ks) {
