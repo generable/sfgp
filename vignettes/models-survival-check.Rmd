@@ -1,0 +1,273 @@
+---
+title: "survival-model-check"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+author: Jacqueline Buros Novik and Juho Timonen
+vignette: >
+  %\VignetteIndexEntry{survival-model-check}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Setup
+
+```{r setup}
+# library(devtools)
+# Sys.setenv(GITHUB_PAT = "")
+# devtools::install_github("sambrilleman/simjm")
+library(simjm)
+library(sfgp)
+library(ggplot2)
+library(survminer)
+library(survival)
+library(tidyverse)
+```
+
+# Model
+
+```{r}
+tsm <- TSModel$new(y ~ offset(z) + gp(t), compile = F)
+m <- JointModel$new(lon = tsm)
+print(m)
+
+format_lon_data <- function(data) {
+  dat_lon <- data$Long1[, c("id", "Z1", "Z2", "tij", "Yij_1")]
+  dat_lon$id <- as.factor(dat_lon$id)
+  dat_lon$Z1 <- as.factor(dat_lon$Z1)
+  colnames(dat_lon) <- c("id", "z", "x", "t", "y")
+  dat_lon
+}
+format_tte_data <- function(data) {
+  dat_tte <- data$Event[, c("id", "Z1", "Z2", "eventtime", "status")]
+  dat_tte$id <- as.factor(dat_tte$id)
+  dat_tte$Z1 <- as.factor(dat_tte$Z1)
+  dat_tte$status <- as.logical(dat_tte$status)
+  colnames(dat_tte) <- c("id", "z", "x", "t", "event")
+  dat_tte
+}
+format_data <- function(data, num_points = 30) {
+  dat_lon <- format_lon_data(data)
+  # truncating at values less than 0.01
+  dat_lon$y <- if_else(dat_lon$y < 0.01, 0.01, dat_lon$y)
+  dat_tte <- format_tte_data(data)
+  list(
+    lon = dat_lon,
+    tte = dat_tte,
+    grid = create_jm_grid(dat_tte, dat_lon,
+      num_points = num_points,
+      id_var = "id"
+    )
+  )
+}
+plot_h0 <- function(fit) {
+  h0 <- fit$h0()
+  # We do this to avoid grouping by id in the plot
+  inp <- h0$get_input()
+  inp <- inp[, "t", drop = FALSE]
+  h0_new <- FunctionDraws$new(inp, h0$get_output(), h0$get_name())
+
+  h0_new$plot()
+}
+plot_params <- function(post_params, true_params) {
+  ggplot(post_params, aes(x = .value, group = .variable)) +
+    tidybayes::stat_halfeye() +
+    facet_wrap(~.variable, scale = "free") +
+    geom_vline(aes(xintercept = .value), data = true_params, color = "firebrick")
+}
+plot_corr <- function(post_params) {
+  ggplot(
+    post_params |> tidyr::spread(.variable, .value),
+    aes(x = assoc, y = h0_lambda)
+  ) +
+    geom_point() +
+    ggtitle("Correlation between posterior draws for assoc & h0_lambda")
+}
+```
+
+# Scenario 1: No association, Intercept-only, Weibull hazard
+
+First we simulate data with no covariate effects on the hazard & no association.
+
+This is a Weibull model with an intercept only and gamma set to 1, so it's equivalent to an exponential model with constant hazard. 
+
+The question is whether we can recover the shape parameter.
+
+```{r sim01, fig.width=7, fig.height=5}
+params <- list(h0_gamma = 1, h0_lambda = 0.2)
+data <- simjm(
+  assoc = "null",
+  n = 30, basehaz = "weibull",
+  fixed_trajectory = "linear",
+  random_trajectory = "none",
+  b_sd = 1,
+  betaEvent_intercept = c(log(params$h0_lambda)),
+  betaEvent_assoc = c(0),
+  betaEvent_binary = c(0),
+  betaEvent_aux = c(params$h0_gamma),
+  max_fuptime = 50,
+  betaEvent_continuous = c(0),
+  seed = 10
+)
+params1 <- attr(data, "params")
+plot(data)
+
+# plot simulated event data
+sfit <- survfit(Surv(eventtime, status) ~ 1, data = data$Event)
+ggsurvplot(sfit, data = data$Event)
+```
+
+
+## Viewing the data
+
+Next, let's plot the raw longitudinal data
+
+```{r, fig.width=7, fig.height=5}
+data$Long1 |>
+  ggplot(aes(x = tij, y = Yij_1, group = factor(id), colour = factor(id))) +
+  geom_line()
+```
+
+
+
+```{r}
+dat <- format_data(data)
+case1_fit <- fit <- m$fit(
+  data_lon = dat$lon, data_tte = dat$tte, data_grid = dat$grid,
+  chains = 1
+)
+```
+
+## Summarize results
+
+
+### Baseline and instant hazard
+
+Note that the "assoc" term (and other betas) can absorb some of the "lambda" 
+term, particularly if predictors are not centered.
+
+
+```{r, fig.width=7, fig.height=5}
+plot_h0(fit)
+fit$plot_hazard()
+fit$plot(facet_by = "id")
+```
+
+### Association and parameters 
+
+```{r, fig.width=7.2, fig.height=3}
+print(fit$draws("assoc")) # association
+true_params <- tibble::tibble(!!!params, assoc = 0) |>
+  tidyr::gather(".variable", ".value")
+stan_fit <- fit$get_stan_fit()
+post_params <- tidybayes::gather_draws(stan_fit, h0_lambda, h0_gamma, assoc)
+plot_params(post_params, true_params)
+```
+
+Note that the "assoc" term (and other betas) can absorb some of the "lambda" 
+term, particularly if predictors are not centered.
+
+```{r, fig.width=5.2, fig.height=4}
+plot_corr(post_params)
+```
+
+### Survival function
+
+```{r, fig.width=7, fig.height=5}
+p <- fit$predict(data_tte = dat$grid)
+p$survival_function()$plot()
+```
+
+
+# Scenario 2: With association 
+
+```{r sim02, fig.width=7, fig.height=5}
+params <- list(h0_lambda = 0.01, h0_gamma = 1)
+true_assoc <- 0.35
+data <- simjm(
+  n = 30, basehaz = "weibull",
+  fixed_trajectory = "linear",
+  random_trajectory = "none",
+  b_sd = 1,
+  betaEvent_intercept = c(log(params$h0_lambda)),
+  betaEvent_assoc = c(true_assoc),
+  betaEvent_binary = c(0),
+  betaEvent_continuous = c(0),
+  betaEvent_aux = c(params$h0_gamma),
+  max_fuptime = 50,
+  max_yobs = 20,
+  seed = 100
+)
+print(attr(data, "params"))
+plot(data)
+# plot_traj(yvar = "Yij_1", data = data$Long1)
+```
+
+## Viewing the data
+
+Next, let's plot the raw longitudinal data
+
+```{r, fig.width=7, fig.height=5}
+data$Long1 |>
+  ggplot(aes(x = tij, y = Yij_1, group = factor(id), colour = factor(id))) +
+  geom_line()
+```
+
+
+
+```{r}
+dat <- format_data(data)
+case2_fit <- fit <- m$fit(
+  data_lon = dat$lon, data_tte = dat$tte, data_grid = dat$grid,
+  chains = 1
+)
+```
+
+## Summarize results
+
+
+### Baseline and instant hazard
+
+
+```{r, fig.width=7, fig.height=5}
+plot_h0(fit)
+fit$plot_hazard() + scale_y_log10()
+fit$plot(facet_by = "id")
+```
+
+### Association and parameters 
+
+```{r, fig.width=7.2, fig.height=3}
+print(fit$draws("assoc")) # association
+true_params <- tibble::tibble(!!!params, assoc = true_assoc) |>
+  tidyr::gather(".variable", ".value")
+stan_fit <- fit$get_stan_fit()
+post_params <- tidybayes::gather_draws(stan_fit, h0_lambda, h0_gamma, assoc)
+plot_params(post_params, true_params)
+```
+
+```{r, fig.width=5.2, fig.height=4}
+plot_corr(post_params)
+```
+### Survival function
+
+```{r, fig.width=7, fig.height=5}
+p <- fit$predict(data_tte = dat$grid)
+p$survival_function()$plot()
+```
+
+
+
+# Used Stan code
+```{r}
+cat(m$create_stancode())
+```

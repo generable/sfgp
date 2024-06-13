@@ -1,0 +1,217 @@
+---
+title: "SF model with different formulas for ks parameter"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{SF model with different formulas for ks parameter}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(ggplot2)
+library(sfgp)
+library(dplyr)
+```
+
+
+# Models
+
+```{r models, fig.width = 7.2, fig.height = 4.3}
+form1 <- y ~ sff(t | ks ~ offset(id_ks | arm_ks) + gp(auc_ks), kg ~ offset(id_kg | arm_kg))
+form2 <- y ~ sff(t | ks ~ offset(id_ks | arm_ks) + emax(auc_ks, dummy_ks), kg ~ offset(id_kg | arm_kg))
+prior_bas <- list(prior_intercept = "normal(4,2)")
+m1 <- TSModel$new(form1, prior_baseline = prior_bas)
+m2 <- TSModel$new(form2, prior_baseline = prior_bas)
+```
+
+# Data
+```{r dat1, fig.width = 7.2, fig.height = 4}
+# Creates data with auc
+create_data <- function(...) {
+  N <- 10
+  dat <- sfsim(
+    n1 = N + 1, n2 = N, n3 = N - 1, kg_sd = 0.2, ks_sd = 0.2,
+    sigma = 0.2, ...
+  )
+  dat$auc <- 400 * dat$x
+  dat$dummy <- as.factor(rep(1, nrow(dat)))
+  dat
+}
+
+# Plot
+plot_auc <- function(dat) {
+  p_exp <- ggplot(dat, aes(x = t, y = auc, group = id)) +
+    geom_line(color = "firebrick", alpha = 0.6) +
+    ggtitle("Exposure profiles") +
+    ylab("Exposure")
+  p_eff <- ggplot(dat, aes(x = auc, y = f_x_ks)) +
+    geom_line() +
+    ggtitle("True effect of exposure on ks") +
+    ylab("Effect on log(ks)") +
+    xlab("Exposure")
+  p_eff2 <- ggplot(dat, aes(x = t, y = f_x_ks, group = id)) +
+    geom_line(color = "firebrick", alpha = 0.6) +
+    ggtitle("True effect profiles") +
+    ylab("Effect on log(ks)")
+  ggpubr::ggarrange(p_exp, p_eff, p_eff2)
+}
+
+ttt <- seq(0.01, 48, by = 4) / 48
+dat <- create_data(times = ttt, x_effect = 2)
+
+# Plot effect
+plot_auc(dat)
+
+# Plot data
+ggplot(dat, aes(x = t, y = y, group = id, color = arm)) +
+  geom_line() +
+  ylab("PSA") +
+  xlab("Normalized time")
+```
+# Fits
+
+```{r fit1, fig.width = 7.2, fig.height = 4}
+dat1 <- add_sff_input(dat, m1)
+dat2 <- add_sff_input(dat, m2)
+f1 <- m1$fit(dat1, chains = 1, refresh = 500)
+f2 <- m2$fit(dat2, chains = 1, refresh = 500)
+
+
+f_gp <- f1$create_functiondraws(c("auc", "auc_ks"), "f_gp_auc_ks")
+f_emax <- f2$create_functiondraws(c("auc", "auc_ks"), "f_emax_auc_ksXdummy_ks")
+plt_f <- ggpubr::ggarrange(
+  f_gp$plot() + theme(legend.position = "none") + ggtitle("GP"),
+  f_emax$plot() + theme(legend.position = "none") + ggtitle("Emax")
+)
+print(f2$draws("gamma"))
+plt_f
+```
+
+# Expected PSA with given constant exposure
+
+```{r, fig.width=7, fig.height=3.5}
+# Predict for all subjects given constant AUC, and take mean of each arm
+predict_at_auc <- function(dat, fit, auc) {
+  t_test <- seq(0, 1, by = 0.05)
+  test_dat <- extend_df2(dat, t_test, "t", auc, "auc", "id")
+  capture.output({
+    test_dat <- add_sff_input(test_dat, fit$get_model())
+    p <- fit$predict(test_dat)
+  })
+  df <- p$function_draws()$quantiles_df()
+  df <- aggregate(med ~ arm + t + auc, data = df, FUN = mean, na.rm = TRUE)
+  list(
+    df = df,
+    p = p
+  )
+}
+
+# Loop over range of AUC values
+predict_at_auc_range <- function(dat, fit, AUC_range) {
+  df <- NULL
+  p <- list()
+  j <- 0
+  for (auc in AUC_range) {
+    j <- j + 1
+    message("* auc = ", auc)
+    pa <- predict_at_auc(dat, fit, auc = auc)
+    p[[j]] <- pa$p
+    df <- rbind(df, pa$df)
+  }
+  df$auc <- factor(df$auc, ordered = TRUE)
+  names(p) <- AUC_range
+  list(df = df, p = p)
+}
+
+# Plot
+plot_auc_range <- function(df) {
+  ggplot(df, aes(x = t, y = med, color = auc, group = auc)) +
+    geom_line(lwd = 1) +
+    facet_wrap(. ~ arm) +
+    ylab("PSA") +
+    ggtitle("Expected PSA by arm given exposure (auc)") +
+    xlab("Normalized time") +
+    scale_color_brewer(palette = 7, type = "div")
+}
+
+AUC_range <- c(1, 100, 125, 150, 200, 400)
+```
+
+## GP model result
+
+```{r, fig.width=7, fig.height=3.5}
+pa1 <- predict_at_auc_range(dat, f1, AUC_range)
+plot_auc_range(pa1$df)
+```
+
+## Emax model result
+
+```{r, fig.width=7, fig.height=3.5}
+pa2 <- predict_at_auc_range(dat, f2, AUC_range)
+plot_auc_range(pa2$df)
+```
+
+# Depth and duration
+
+
+```{r}
+# Helper to get trajectories relative to start
+get_traj <- function(p) {
+  p$function_draws(data_scale = F)$zero_offset_by_id("id")$exp()
+}
+# Helper to get trajectory metrics
+get_tm <- function(p) {
+  trajectory_metrics(get_traj(p), "id", "t")
+}
+
+# Combined data frame with all auc
+summary_df <- function(p) {
+  df_list <- lapply(p, get_tm)
+  df <- dplyr::bind_rows(df_list, .id = "auc")
+  df$auc <- factor(df$auc, ordered = TRUE)
+  df
+}
+```
+
+## GP model
+
+```{r}
+df1 <- summary_df(pa1$p) # takes a while to compute all metrics
+df1a <- dplyr::left_join(df1, dat[, c("id", "arm")], by = "id")
+df1a %>%
+  group_by(arm, auc) %>%
+  summarize(mean_depth = mean(depth), mean_dur = mean(duration))
+```
+
+## Emax model
+
+```{r}
+df2 <- summary_df(pa2$p) # takes a while to compute all metrics
+df2a <- dplyr::left_join(df2, dat[, c("id", "arm")], by = "id")
+df2a %>%
+  group_by(arm, auc) %>%
+  summarize(mean_depth = mean(depth), mean_dur = mean(duration))
+```
+
+# Used Stan code
+
+## Model with GP
+
+```{r}
+cat(m1$create_stancode())
+```
+
+## Model with sigmoid (Emax)
+
+```{r}
+cat(m2$create_stancode())
+```

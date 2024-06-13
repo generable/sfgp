@@ -1,0 +1,136 @@
+---
+title: "survival-model"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{survival-model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Setup
+
+```{r setup}
+library(sfgp)
+library(ggplot2)
+```
+
+## Data simulation
+
+The data has been simulated using `simjm`. Here we just load it.
+
+```{r sim, fig.width=7, fig.height=5}
+# data <- simjm(
+#  n = 30, fixed_trajectory = "quadratic",
+#  max_fuptime = 15
+# )
+data <- example_data_jm
+```
+
+## Format data for sfgp
+
+
+### Longitudinal data
+
+```{r format-lon}
+dat_lon <- data$lon[, c("id", "Z1", "Z2", "tij", "Yij_1")]
+dat_lon$id <- as.factor(dat_lon$id)
+dat_lon$Z1 <- as.factor(dat_lon$Z1)
+colnames(dat_lon) <- c("id", "z", "x", "t", "y")
+head(dat_lon)
+```
+
+### Time-to-event data
+
+```{r format-tte}
+dat_tte <- data$tte[, c("id", "Z1", "Z2", "eventtime", "status")]
+dat_tte$id <- as.factor(dat_tte$id)
+dat_tte$Z1 <- as.factor(dat_tte$Z1)
+dat_tte$status <- as.logical(dat_tte$status)
+colnames(dat_tte) <- c("id", "z", "x", "t", "event")
+head(dat_tte)
+```
+
+### Numerical integration grid
+
+```{r grid}
+dat_grid <- create_jm_grid(dat_tte, dat_lon,
+  num_points = 30,
+  id_var = "id"
+)
+```
+
+
+## Creating a Joint model
+
+```{r model}
+tsm <- TSModel$new(y ~ gp(t) + offset(z) + gp(x), compile = F)
+m <- JointModel$new(lon = tsm)
+print(m)
+```
+
+## Fitting a model
+
+```{r fit, fig.width=7, fig.height=6}
+fit <- m$fit(
+  data_lon = dat_lon, data_tte = dat_tte, data_grid = dat_grid,
+  chains = 1, iter_warmup = 800, iter_sampling = 600
+)
+```
+
+
+## Visualizing the fit
+
+### Longitudinal model
+
+```{r, fig.width=7, fig.height=6}
+fit$plot() + facet_wrap(. ~ id)
+```
+
+The shared GP component
+```{r, fig.width=7, fig.height=4}
+fit$function_draws("f_gp_t")$plot()
+```
+
+### Instant hazard
+
+```{r, fig.width=7, fig.height=6}
+print(fit$draws("assoc")) # association
+print(fit$draws("h0_lambda")) # hazard function param
+print(fit$draws("h0_gamma")) # hazard function param
+fit$plot_hazard(plot_events = FALSE)
+```
+
+### Baseline hazard
+
+```{r, fig.width=7, fig.height=6}
+h0 <- fit$h0()
+
+# We do this to avoid grouping by id in the plot
+inp <- h0$get_input()
+inp <- inp[, "t", drop = FALSE]
+h0_new <- FunctionDraws$new(inp, h0$get_output(), h0$get_name())
+
+h0_new$plot()
+```
+
+
+## Predicting survival
+
+```{r, fig.width=7, fig.height=6}
+dat_pred <- dat_grid
+p <- fit$predict(data_tte = dat_pred)
+
+# H(t)
+p$cumulative_hazard()$plot()
+
+# exp(-H(t))
+surv <- p$survival_function(NULL)
+surv$plot()
+```

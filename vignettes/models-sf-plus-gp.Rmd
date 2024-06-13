@@ -1,0 +1,97 @@
+---
+title: "SF + GP model"
+author: "Juho Timonen"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{SF + GP model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(ggplot2)
+library(sfgp)
+```
+
+## Test data
+
+We create rapidly wiggling data.
+```{r data}
+set.seed(123)
+xx <- seq(1, 8, by = 0.15)
+ff <- 20 + 5 * sin(xx) + 2 * sin(5 * xx) + xx
+yy <- ff + rnorm(n = length(xx), mean = 0, sd = 1)
+a <- data.frame(x = xx, y = yy)
+head(a)
+```
+
+## SF model
+
+This is probably the simplest possible SF model.
+```{r model}
+m1 <- TSModel$new(y ~ sf(x))
+```
+
+
+We fit the model.
+```{r fits, fig.width=7, fig.height=4}
+f1 <- m1$fit(data = a, chains = 1, iter_warmup = 300, iter_sampling = 300)
+f1$plot()
+```
+
+## GP model
+
+This is probably the simplest possible GP model.
+```{r model2}
+m2 <- TSModel$new(y ~ gp(x))
+```
+
+
+We fit the model.
+```{r fit2s, fig.width=7, fig.height=4}
+f2 <- m2$fit(data = a, chains = 1, iter_warmup = 300, iter_sampling = 300)
+f2$plot()
+```
+
+
+## SF + GP model
+
+This is probably the simplest possible SF+GP model.
+```{r model3}
+m3 <- TSModel$new(y ~ sf(x) + gp(x))
+```
+
+
+We fit the model.
+```{r fit3s, fig.width=7, fig.height=4}
+f3 <- m3$fit(data = a, chains = 1, iter_warmup = 600, iter_sampling = 600)
+f3$plot()
+```
+
+We plot components of the model
+
+```{r plotc, fig.width=7, fig.height=4}
+f3$function_draws("f_gp_x")$plot()
+f3$function_draws("f_log_sf_x")$plot()
+```
+
+## Predicting
+
+We can predict at new test points.
+
+```{r plots2, fig.width=7, fig.height=6}
+t_pred <- seq(0, 9, by = 0.2)
+pred <- f3$predict_time(t_pred, t_var = "x")
+plt <- pred$plot(plot_y = FALSE) +
+  ggplot2::geom_point(data = a, inherit.aes = F, aes(x = x, y = y))
+plt
+```
+
+
