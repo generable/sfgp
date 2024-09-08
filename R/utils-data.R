@@ -3,12 +3,14 @@
 #' @export
 #' @param df original data frame
 #' @param t vector of new time values
-#' @param time_var name of time variable
+#' @param time_var name of time variables
 #' @return new data frame
 extend_df <- function(df, t, time_var) {
   u <- df_unique_factor_rows(df)
   df <- df_replicate_rows(u, length(t))
-  df[[time_var]] <- rep(t, nrow(u))
+  for (v in time_var) {
+    df[[v]] <- rep(t, nrow(u))
+  }
   df
 }
 
