@@ -127,7 +127,7 @@ predict_new_subjects <- function(fit_post, fit_prior,
 
   # Pick one subject from each group
   newdat <- group_pred_input(fit_post, group_var, t_pred, time_var)
-
+  newdat <- add_sff_input(newdat, fit_post$get_model())
   # Take draws
   if (is.null(prior_param_names)) {
     prior_param_names <- id_specific_param_names(fit_post)
