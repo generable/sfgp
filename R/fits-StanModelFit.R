@@ -54,6 +54,16 @@ StanModelFit <- R6::R6Class("StanModelFit",
       private$stan_data <- stan_data
     },
 
+    save_object = function(file, ...) {
+      # replicate internals of `cmdstanr::CmdStanFit$save_object`
+      private$stan_fit$draws()
+      try(private$stan_fit$sampler_diagnostics(), silent = TRUE)
+      try(private$stan_fit$init(), silent = TRUE)
+      try(private$stan_fit$profiles(), silent = TRUE)
+      saveRDS(self, file = file, ...)
+      invisible(self)
+    },
+
     #' @description Get the underlying 'Stan' fit object.
     get_stan_fit = function() {
       private$stan_fit

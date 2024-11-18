@@ -67,10 +67,13 @@ stancode_ts_gq <- function(mod, stanname_y, sc_terms_gq) {
     "  vector[n_LON] f_sum_capped = fmin(f_sum, ", cap_val, ");"
   )
   def_ycap <- paste0("  vector[n_LON] ", y_var, "_log_pred_capped;")
+  line_ll <- paste0(
+    "    log_lik[i] = normal_lpdf(", stanname_y, "_log[i] | ", "f_sum[i], sigma);"
+  )
   line_yp <- paste0(
     "    ", sylp, "[i] = normal_rng(", "f_sum[i], sigma);"
   )
-  loop <- paste0("  for(i in 1:n_LON) {\n", line_yp, "\n  }")
+  loop <- paste0("  for(i in 1:n_LON) {\n", line_yp, "\n", line_ll, "\n }")
   line_ycap <- paste0(
     "  ", y_var, "_log_pred_capped = fmin(", sylp, ", ",
     cap_val, ");"

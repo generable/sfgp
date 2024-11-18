@@ -81,6 +81,8 @@ treatment_effect <- function(fit_post, fit_prior, time_var = "t",
 trajectory_metrics <- function(trajectories, id_var, time_var) {
   checkmate::assert_class(trajectories, "FunctionDraws")
   checkmate::assert_character(id_var, len = 1)
+  # use first provided time_var
+  time_var <- time_var[[1]]
   checkmate::assert_character(time_var, len = 1)
   df <- trajectories$as_data_frame_long()
   df %>%
@@ -120,12 +122,12 @@ predict_new_subjects <- function(fit_post, fit_prior,
                                  prior_param_names = NULL) {
   checkmate::assert_class(fit_post, "TSModelFit")
   checkmate::assert_class(fit_prior, "TSModelFit")
-  t_data <- fit_post$get_data("LON")[[time_var]]
+  t_data <- fit_post$get_data("LON")[[time_var[[1]]]]
   t_pred <- t_pred_auto(t_pred, t_data)
 
   # Pick one subject from each group
   newdat <- group_pred_input(fit_post, group_var, t_pred, time_var)
-
+  newdat <- add_sff_input(newdat, fit_post$get_model())
   # Take draws
   if (is.null(prior_param_names)) {
     prior_param_names <- id_specific_param_names(fit_post)
